@@ -132,7 +132,7 @@ pipeline {
                             echo "Building version ${v} - so released version is ${releasedVersion}"
                         }
                         // jenkins user credentials ID which is transparent to the user and password change
-                        sshagent(['1d529f59-0e5e-43b2-a604-ba26929d300a']) {
+                        sshagent(['c43421fc-61e1-42c4-bc27-23a9f30dbc6a']) {
                             sh "git tag -f v${v}"
                             sh "git push -f --tags"
                         }
