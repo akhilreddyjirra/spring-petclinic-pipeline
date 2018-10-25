@@ -146,10 +146,10 @@ pipeline {
             }
         }
         stage('Deploy to Acceptance') {
-            when {
+           // when {
                 // check if branch is master
-                branch 'master'
-            }
+           //     branch 'master'
+           // }
             steps {
                 script {
                     if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
