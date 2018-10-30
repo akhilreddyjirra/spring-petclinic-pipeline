@@ -25,8 +25,8 @@ pipeline {
                         developmentArtifactVersion = "${pom.version}-${targetVersion}"
                         print pom.version
                         // execute the unit testing and collect the reports
-                        junit '**//*target/surefire-reports/TEST-*.xml'
-                        archive 'target*//*.war' 
+                        //junit '**//*target/surefire-reports/TEST-*.xml'
+                        archive 'target*//*.jar' 
                     }
 
                 }
@@ -84,7 +84,7 @@ pipeline {
                             //
                             if (developmentArtifactVersion != null && !developmentArtifactVersion.isEmpty()) {
                                 // replace it with your application name or make it easily loaded from pom.xml
-                                def jarName = "application-${developmentArtifactVersion}.war"
+                                def jarName = "application-${developmentArtifactVersion}.jar"
                                 echo "the application is deploying ${jarName}"
                                 // NOTE : CREATE your deployemnt JOB, where it can take parameters whoch is the jar name to fetch from jenkins workspace
                                 // build job: 'ApplicationToDev', parameters: [[$class: 'StringParameterValue', name: 'jarName', value: jarName]]
@@ -162,7 +162,7 @@ pipeline {
                             //  deployment job which will take the relasesed version
                             if (releasedVersion != null && !releasedVersion.isEmpty()) {
                                 // make the applciation name for the jar configurable
-                                def jarName = "application-${releasedVersion}.war"
+                                def jarName = "application-${releasedVersion}.jar"
                                 echo "the application is deploying ${jarName}"
                                 // NOTE : DO NOT FORGET to create your UAT deployment jar , check Job AlertManagerToUAT in Jenkins for reference
                                 // the deployemnt should be based into Nexus repo
