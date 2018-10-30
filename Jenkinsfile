@@ -1,5 +1,5 @@
 pipeline {
-    // run on jenkins nodes tha has java 8 label
+    // run on jenkins nodes tha has slave-01 label
     agent any
     // global env variables
     environment {
@@ -25,29 +25,25 @@ pipeline {
                         developmentArtifactVersion = "${pom.version}-${targetVersion}"
                         print pom.version
                         // execute the unit testing and collect the reports
-                        // junit '**//*target/surefire-reports/TEST-*.xml'
-                        archive 'target*//*.jar'
-                }
+                        junit '**//*target/surefire-reports/TEST-*.xml'
+                        archive 'target*//*.war' 
+                    }
 
+                }
             }
-        }
         stage('Integration tests') {
             // Run integration test
             steps {
                 script {
                     def mvnHome = tool 'Maven 3.5.4'
-                    if (isUnix()) {
                         // just to trigger the integration test without unit testing
                         sh "'${mvnHome}/bin/mvn'  verify -Dunit-tests.skip=true"
-                    } else {
-                        bat(/"${mvnHome}\bin\mvn" verify -Dunit-tests.skip=true/)
-                    }
 
-                }
+                    }
                 // cucumber reports collection
-                cucumber buildStatus: null, fileIncludePattern: '**/cucumber.json', jsonReportDirectory: 'target', sortingMethod: 'ALPHABETICAL'
+                //cucumber buildStatus: null, fileIncludePattern: '**/cucumber.json', jsonReportDirectory: 'target', sortingMethod: 'ALPHABETICAL'
+                }
             }
-        }
         stage('Sonar scan execution') {
             // Run the sonar scan
             steps {
@@ -88,10 +84,10 @@ pipeline {
                             //
                             if (developmentArtifactVersion != null && !developmentArtifactVersion.isEmpty()) {
                                 // replace it with your application name or make it easily loaded from pom.xml
-                                def jarName = "application-${developmentArtifactVersion}.jar"
+                                def jarName = "application-${developmentArtifactVersion}.war"
                                 echo "the application is deploying ${jarName}"
                                 // NOTE : CREATE your deployemnt JOB, where it can take parameters whoch is the jar name to fetch from jenkins workspace
-                                build job: 'ApplicationToDev', parameters: [[$class: 'StringParameterValue', name: 'jarName', value: jarName]]
+                                // build job: 'ApplicationToDev', parameters: [[$class: 'StringParameterValue', name: 'jarName', value: jarName]]
                                 echo 'the application is deployed !'
                             } else {
                                 error 'the application is not  deployed as development version is null!'
@@ -112,7 +108,7 @@ pipeline {
                             script {
                                 def mvnHome = tool 'Maven 3.5.4'
                                 //NOTE : if u change the sanity test class name , change it here as well
-                                sh "'${mvnHome}/bin/mvn' -Dtest=ApplicationSanityCheck_ITT surefire:test"
+                                sh "'${mvnHome}/bin/mvn' -Dtest=ApplicationSanityCheck_ITT surefire:test -DfailIfNoTests=false"
                             }
 
                         }
@@ -121,10 +117,10 @@ pipeline {
             }
         }
         stage('Release and publish artifact') {
-            when {
+           // when {
                 // check if branch is master
-                branch 'master'
-            }
+            //    branch 'master'
+           // }
             steps {
                 // create the release version then create a tage with it , then push to nexus releases the released jar
                 script {
@@ -136,7 +132,8 @@ pipeline {
                             echo "Building version ${v} - so released version is ${releasedVersion}"
                         }
                         // jenkins user credentials ID which is transparent to the user and password change
-                        sshagent(['0000000-3b5a-454e-a8e6-c6b6114d36000']) {
+                        sshagent(['ce7df8af-bcee-406b-b25f-a14b2bedf7e5']) {
+                            sh "git remote set-url origin git@github.com:awsdora/petclinic-pipeline.git"
                             sh "git tag -f v${v}"
                             sh "git push -f --tags"
                         }
@@ -150,10 +147,10 @@ pipeline {
             }
         }
         stage('Deploy to Acceptance') {
-            when {
+           // when {
                 // check if branch is master
-                branch 'master'
-            }
+           //     branch 'master'
+           // }
             steps {
                 script {
                     if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
@@ -165,7 +162,7 @@ pipeline {
                             //  deployment job which will take the relasesed version
                             if (releasedVersion != null && !releasedVersion.isEmpty()) {
                                 // make the applciation name for the jar configurable
-                                def jarName = "application-${releasedVersion}.jar"
+                                def jarName = "application-${releasedVersion}.war"
                                 echo "the application is deploying ${jarName}"
                                 // NOTE : DO NOT FORGET to create your UAT deployment jar , check Job AlertManagerToUAT in Jenkins for reference
                                 // the deployemnt should be based into Nexus repo
