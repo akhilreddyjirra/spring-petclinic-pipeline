@@ -1,6 +1,6 @@
 pipeline {
-    // run on jenkins nodes tha has slave-01 label
-    agent { label 'sensen-build-slave-01' }
+    // run on jenkins nodes tha has java 8 label
+    agent { label 'java8' }
     // global env variables
     environment {
         EMAIL_RECIPIENTS = 'akhilreddyjirra@gmail.com'
@@ -15,7 +15,8 @@ pipeline {
                     // ** NOTE: This 'M3' Maven tool must be configured
                     // **       in the global configuration.
                     echo 'Pulling...' + env.BRANCH_NAME
-                    def mvnHome = tool 'Maven 3.5.4'
+                    def mvnHome = tool 'Maven 3.3.9'
+                    if (isUnix()) {
                         def targetVersion = getDevVersion()
                         print 'target build version...'
                         print targetVersion
@@ -25,31 +26,42 @@ pipeline {
                         developmentArtifactVersion = "${pom.version}-${targetVersion}"
                         print pom.version
                         // execute the unit testing and collect the reports
-                        //junit '**//*target/surefire-reports/TEST-*.xml'
-                        archive 'target*//*.jar' 
+                        // junit '**//*target/surefire-reports/TEST-*.xml'
+                        archive 'target*//*.jar'
+                    } else {
+                        bat(/"${mvnHome}\bin\mvn" -Dintegration-tests.skip=true clean package/)
+                        def pom = readMavenPom file: 'pom.xml'
+                        print pom.version
+                        junit '**//*target/surefire-reports/TEST-*.xml'
+                        archive 'target*//*.jar'
                     }
-
                 }
+
             }
+        }
         stage('Integration tests') {
             // Run integration test
             steps {
                 script {
-                    def mvnHome = tool 'Maven 3.5.4'
+                    def mvnHome = tool 'Maven 3.3.9'
+                    if (isUnix()) {
                         // just to trigger the integration test without unit testing
                         sh "'${mvnHome}/bin/mvn'  verify -Dunit-tests.skip=true"
-
+                    } else {
+                        bat(/"${mvnHome}\bin\mvn" verify -Dunit-tests.skip=true/)
                     }
-                // cucumber reports collection
-                //cucumber buildStatus: null, fileIncludePattern: '**/cucumber.json', jsonReportDirectory: 'target', sortingMethod: 'ALPHABETICAL'
+
                 }
+                // cucumber reports collection
+                cucumber buildStatus: null, fileIncludePattern: '**/cucumber.json', jsonReportDirectory: 'target', sortingMethod: 'ALPHABETICAL'
             }
+        }
         stage('Sonar scan execution') {
             // Run the sonar scan
             steps {
                 script {
-                    def mvnHome = tool 'Maven 3.5.4'
-                    withSonarQubeEnv('sonarqube-server') {
+                    def mvnHome = tool 'Maven 3.3.9'
+                    withSonarQubeEnv {
 
                         sh "'${mvnHome}/bin/mvn'  verify sonar:sonar -Dintegration-tests.skip=true -Dmaven.test.failure.ignore=true"
                     }
@@ -87,7 +99,7 @@ pipeline {
                                 def jarName = "application-${developmentArtifactVersion}.jar"
                                 echo "the application is deploying ${jarName}"
                                 // NOTE : CREATE your deployemnt JOB, where it can take parameters whoch is the jar name to fetch from jenkins workspace
-                                // build job: 'ApplicationToDev', parameters: [[$class: 'StringParameterValue', name: 'jarName', value: jarName]]
+                                build job: 'ApplicationToDev', parameters: [[$class: 'StringParameterValue', name: 'jarName', value: jarName]]
                                 echo 'the application is deployed !'
                             } else {
                                 error 'the application is not  deployed as development version is null!'
@@ -106,9 +118,9 @@ pipeline {
                     if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
                         timeout(time: 1, unit: 'MINUTES') {
                             script {
-                                def mvnHome = tool 'Maven 3.5.4'
+                                def mvnHome = tool 'Maven 3.3.9'
                                 //NOTE : if u change the sanity test class name , change it here as well
-                                sh "'${mvnHome}/bin/mvn' -Dtest=ApplicationSanityCheck_ITT surefire:test -DfailIfNoTests=false"
+                                sh "'${mvnHome}/bin/mvn' -Dtest=ApplicationSanityCheck_ITT surefire:test"
                             }
 
                         }
@@ -117,14 +129,14 @@ pipeline {
             }
         }
         stage('Release and publish artifact') {
-           // when {
+            when {
                 // check if branch is master
-            //    branch 'master'
-           // }
+                branch 'master'
+            }
             steps {
                 // create the release version then create a tage with it , then push to nexus releases the released jar
                 script {
-                    def mvnHome = tool 'Maven 3.5.4' //
+                    def mvnHome = tool 'Maven 3.3.9' //
                     if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
                         def v = getReleaseVersion()
                         releasedVersion = v;
@@ -132,8 +144,7 @@ pipeline {
                             echo "Building version ${v} - so released version is ${releasedVersion}"
                         }
                         // jenkins user credentials ID which is transparent to the user and password change
-                        sshagent(['c43421fc-61e1-42c4-bc27-23a9f30dbc6a']) {
-                            sh "git remote set-url origin git@github.com:akhilreddyjirra/spring-petclinic-pipeline.git"
+                        sshagent(['0000000-3b5a-454e-a8e6-c6b6114d36000']) {
                             sh "git tag -f v${v}"
                             sh "git push -f --tags"
                         }
@@ -147,10 +158,10 @@ pipeline {
             }
         }
         stage('Deploy to Acceptance') {
-           // when {
+            when {
                 // check if branch is master
-           //     branch 'master'
-           // }
+                branch 'master'
+            }
             steps {
                 script {
                     if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
@@ -190,7 +201,7 @@ pipeline {
                         timeout(time: 1, unit: 'MINUTES') {
 
                             script {
-                                def mvnHome = tool 'Maven 3.5.4'
+                                def mvnHome = tool 'Maven 3.3.9'
                                 // NOTE : if you change the test class name change it here as well
                                 sh "'${mvnHome}/bin/mvn' -Dtest=ApplicationE2E surefire:test"
                             }
@@ -294,7 +305,7 @@ def getReleaseVersion() {
                parallel(
                        IntegrationTest: {
                            script {
-                               def mvnHome = tool 'Maven 3.5.4'
+                               def mvnHome = tool 'Maven 3.3.9'
                                if (isUnix()) {
                                    sh "'${mvnHome}/bin/mvn'  verify -Dunit-tests.skip=true"
                                } else {
@@ -304,7 +315,7 @@ def getReleaseVersion() {
                        },
                        SonarCheck: {
                            script {
-                               def mvnHome = tool 'Maven 3.5.4'
+                               def mvnHome = tool 'Maven 3.3.9'
                                withSonarQubeEnv {
                                    // sh "'${mvnHome}/bin/mvn'  verify sonar:sonar -Dsonar.host.url=http://bicsjava.bc/sonar/ -Dmaven.test.failure.ignore=true"
                                    sh "'${mvnHome}/bin/mvn'  verify sonar:sonar -Dmaven.test.failure.ignore=true"
